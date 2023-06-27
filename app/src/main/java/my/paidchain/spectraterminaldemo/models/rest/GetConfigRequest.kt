@@ -1,0 +1,7 @@
+package my.paidchain.spectraterminaldemo.models.rest
+
+import com.google.gson.annotations.SerializedName
+
+data class GetConfigRequest (
+    @SerializedName("id") val id: String?
+)
