@@ -9,7 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import my.paidchain.spectraterminaldemo.common.Level
-import my.paidchain.spectraterminaldemo.common.Misc
+import my.paidchain.spectraterminaldemo.common.getByteArrayFromAssetFile
 import my.paidchain.spectraterminaldemo.common.log
 import my.paidchain.spectraterminaldemo.common.printer.Printer
 import my.paidchain.spectraterminaldemo.common.printer.PrinterController
@@ -29,13 +29,13 @@ class JSActivity : AppCompatActivity() {
 
             CoroutineScope(Dispatchers.Default).launch {
                 try {
-                    val binCimb = Misc.getByteArrayFromAssetFile(application, "cimb_384x80.bmp")
+                    val binCimb = getByteArrayFromAssetFile(application, "cimb_384x80.bmp")
                     val bitmapCimb = BitmapFactory.decodeByteArray(binCimb, 0, binCimb.size)
 
                     Printer().print(bitmapCimb)
                     log(Level.INFO, javaClass.simpleName) { "Print CIMB" }
 
-                    val binBimb = Misc.getByteArrayFromAssetFile(application, "bimb_384x80.bmp")
+                    val binBimb = getByteArrayFromAssetFile(application, "bimb_384x80.bmp")
                     val bitmapBimb = BitmapFactory.decodeByteArray(binBimb, 0, binBimb.size)
 
                     Printer().print(bitmapBimb)
@@ -53,6 +53,5 @@ class JSActivity : AppCompatActivity() {
         cmdJSCancel.setOnClickListener {
             logger.info { "JS" }
         }
-
     }
 }

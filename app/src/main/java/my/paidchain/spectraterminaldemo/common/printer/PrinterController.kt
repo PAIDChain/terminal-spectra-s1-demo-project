@@ -9,13 +9,9 @@ import android.os.BatteryManager
 import com.spectratech.lib.level2.ULv2
 import com.spectratech.printercontrollers.TapPosPrinterController
 import com.spectratech.printercontrollers.TapPosPrinterController.PrintStatus
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import my.paidchain.spectraterminaldemo.common.ContextAwareError
 import my.paidchain.spectraterminaldemo.common.Errors
 import my.paidchain.spectraterminaldemo.common.Level
-import my.paidchain.spectraterminaldemo.common.awaitWith
 import my.paidchain.spectraterminaldemo.common.log
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -37,81 +33,79 @@ class PrinterController {
     }
 
     suspend fun print(bitmap: Bitmap) {
-        var controller: TapPosPrinterController? = null
-
         synchronized(PrinterController) {
             queue.add(bitmap)
         }
+        
+        var controller: TapPosPrinterController? = null
 
         try {
             suspendCoroutine { continuation ->
-                CoroutineScope(Dispatchers.Default).launch {
-                    try {
-                        controller = TapPosPrinterController.getInstance(app,
-                            PrinterDelegator(PrinterParams(
-                                fnError = { error ->
-                                    log(Level.ERROR, javaClass.simpleName) { "Print ERROR: $error" }
+                try {
+                    controller = TapPosPrinterController.getInstance(app,
+                        PrinterDelegator(PrinterParams(
+                            fnError = { error ->
+                                log(Level.ERROR, javaClass.simpleName) { "Print ERROR: $error" }
 
-                                    try {
-                                        continuation.resumeWithException(error)
-                                    } catch (error: Throwable) {
-                                        log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
-                                        error.printStackTrace()
+                                try {
+                                    continuation.resumeWithException(error)
+                                } catch (error: Throwable) {
+                                    log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
+                                    error.printStackTrace()
+                                }
+                            },
+
+                            fnPrintDataRequested = { onPrintDataRequested(controller!!) },
+
+                            fnPrinterStatus = { status ->
+                                when (status) {
+                                    PrintStatus.PRINTER_SUCCESS,
+                                    PrintStatus.PRINTER_CLOSED,
+                                    PrintStatus.PRINTER_OPENED,
+                                    PrintStatus.PRINTER_CONNECTED,
+                                    PrintStatus.START_PRINT,
+                                    PrintStatus.SEND_PRINT_DATA,
+                                    PrintStatus.PRINT_FINISHED -> {
+                                        log(Level.INFO, javaClass.simpleName) { "Print STATUS is $status" }
                                     }
-                                },
 
-                                fnPrintDataRequested = { onPrintDataRequested(controller!!) },
+                                    PrintStatus.NO_PAPER_OR_COVER_OPENED,
+                                    PrintStatus.OVERHEAT,
+                                    PrintStatus.PRINTER_LOWBATTERY,
+                                    PrintStatus.PRINTER_ERROR -> {
+                                        log(Level.INFO, javaClass.simpleName) { "Print ERROR STATUS is $status" }
 
-                                fnPrinterStatus = { status ->
-                                    when (status) {
-                                        PrintStatus.PRINTER_SUCCESS,
-                                        PrintStatus.PRINTER_CLOSED,
-                                        PrintStatus.PRINTER_OPENED,
-                                        PrintStatus.PRINTER_CONNECTED,
-                                        PrintStatus.START_PRINT,
-                                        PrintStatus.SEND_PRINT_DATA,
-                                        PrintStatus.PRINT_FINISHED -> {
-                                            log(Level.INFO, javaClass.simpleName) { "Print STATUS is $status" }
+                                        try {
+                                            continuation.resumeWithException(ContextAwareError(Errors.Failed.name, "Printer ERROR STATUS is $status"))
+                                        } catch (error: Throwable) {
+                                            log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
+                                            error.printStackTrace()
                                         }
-
-                                        PrintStatus.NO_PAPER_OR_COVER_OPENED,
-                                        PrintStatus.OVERHEAT,
-                                        PrintStatus.PRINTER_LOWBATTERY,
-                                        PrintStatus.PRINTER_ERROR -> {
-                                            log(Level.INFO, javaClass.simpleName) { "Print ERROR STATUS is $status" }
-
-                                            try {
-                                                continuation.resumeWithException(ContextAwareError(Errors.Failed.name, "Printer ERROR STATUS is $status"))
-                                            } catch (error: Throwable) {
-                                                log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
-                                                error.printStackTrace()
-                                            }
-                                        }
-                                    }
-                                },
-                                fnPrinterCompleted = {
-                                    log(Level.INFO, javaClass.simpleName) { "Print status is COMPLETED" }
-
-                                    try {
-                                        continuation.resume(true)
-                                    } catch (error: Throwable) {
-                                        log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
-                                        error.printStackTrace()
                                     }
                                 }
-                            ))
-                        )
+                            },
+                            fnPrinterCompleted = {
+                                log(Level.INFO, javaClass.simpleName) { "Print status is COMPLETED" }
 
-                        onConnect(controller!!)
+                                try {
+                                    continuation.resume(true)
+                                } catch (error: Throwable) {
+                                    log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
+                                    error.printStackTrace()
+                                }
+                            }
+                        ))
+                    )
+
+                    onConnect(controller!!)
+                } catch (error: Throwable) {
+                    log(Level.ERROR, javaClass.simpleName) { "Printer ERROR: $error" }
+
+                    try {
+                        continuation.resumeWithException(error)
                     } catch (error: Throwable) {
-                        log(Level.ERROR, javaClass.simpleName) { "Printer ERROR: $error" }
-
-                        try {
-                            continuation.resumeWithException(error)
-                        } catch (error: Throwable) {
-                            log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
-                            error.printStackTrace()
-                        }
+                        log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
+                        error.printStackTrace()
                     }
                 }
             }

@@ -2,9 +2,6 @@ package my.paidchain.spectraterminaldemo.common.printer
 
 import com.spectratech.printercontrollers.ControllerError
 import com.spectratech.printercontrollers.TapPosPrinterController
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import my.paidchain.spectraterminaldemo.common.Level
 import my.paidchain.spectraterminaldemo.common.log
 import my.paidchain.spectraterminaldemo.common.ContextAwareError
