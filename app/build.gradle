@@ -10,7 +10,7 @@ android {
     compileSdk 33
 
     defaultConfig {
-        applicationId "my.paidchain.spectraterminal"
+        applicationId "my.paidchain.spectraterminaldemo"
         minSdk 25
         targetSdk 33
         versionCode 1
