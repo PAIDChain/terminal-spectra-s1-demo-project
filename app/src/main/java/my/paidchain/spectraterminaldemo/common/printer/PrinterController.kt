@@ -6,13 +6,17 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.os.BatteryManager
+import android.os.ConditionVariable
 import com.spectratech.lib.level2.ULv2
 import com.spectratech.printercontrollers.TapPosPrinterController
 import com.spectratech.printercontrollers.TapPosPrinterController.PrintStatus
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import my.paidchain.spectraterminaldemo.common.ContextAwareError
 import my.paidchain.spectraterminaldemo.common.Errors
 import my.paidchain.spectraterminaldemo.common.Level
 import my.paidchain.spectraterminaldemo.common.log
+import okhttp3.internal.wait
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -27,28 +31,37 @@ class PrinterController {
         private lateinit var app: Application
         private val queue = mutableListOf<Bitmap>()
 
+        val waitPrintFinished = ConditionVariable()
+
         fun init(app: Application) {
             this.app = app
         }
+
     }
 
-    suspend fun print(bitmap: Bitmap) {
+    fun print(bitmap: Bitmap) {
         synchronized(PrinterController) {
             queue.add(bitmap)
         }
-        
+
+
+        var raisedError: Throwable?=null
         var controller: TapPosPrinterController? = null
 
+        log(Level.INFO, javaClass.simpleName) { "Now call print" }
+
         try {
-            suspendCoroutine { continuation ->
+            run {
                 try {
                     controller = TapPosPrinterController.getInstance(app,
                         PrinterDelegator(PrinterParams(
                             fnError = { error ->
-                                log(Level.ERROR, javaClass.simpleName) { "Print ERROR: $error" }
+                                raisedError = error
+                                log(Level.ERROR, javaClass.simpleName) { "Print ERROR: $raisedError" }
 
                                 try {
-                                    continuation.resumeWithException(error)
+                                    waitPrintFinished.open()
+                                   // continuation.resumeWithException(error)
                                 } catch (error: Throwable) {
                                     log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
                                     error.printStackTrace()
@@ -74,9 +87,11 @@ class PrinterController {
                                     PrintStatus.PRINTER_LOWBATTERY,
                                     PrintStatus.PRINTER_ERROR -> {
                                         log(Level.INFO, javaClass.simpleName) { "Print ERROR STATUS is $status" }
+                                        raisedError = ContextAwareError(Errors.Failed.name, "Opps...")
 
                                         try {
-                                            continuation.resumeWithException(ContextAwareError(Errors.Failed.name, "Printer ERROR STATUS is $status"))
+                                            waitPrintFinished.open()
+                                            //continuation.resumeWithException(ContextAwareError(Errors.Failed.name, "Printer ERROR STATUS is $status"))
                                         } catch (error: Throwable) {
                                             log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
                                             error.printStackTrace()
@@ -86,9 +101,10 @@ class PrinterController {
                             },
                             fnPrinterCompleted = {
                                 log(Level.INFO, javaClass.simpleName) { "Print status is COMPLETED" }
-
                                 try {
-                                    continuation.resume(true)
+                                    //continuation.resume(true)
+
+                                    waitPrintFinished.open()
                                 } catch (error: Throwable) {
                                     log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
                                     error.printStackTrace()
@@ -102,7 +118,9 @@ class PrinterController {
                     log(Level.ERROR, javaClass.simpleName) { "Printer ERROR: $error" }
 
                     try {
-                        continuation.resumeWithException(error)
+                        raisedError = error
+                        waitPrintFinished.open()
+                       // continuation.resumeWithException(error)
                     } catch (error: Throwable) {
                         log(Level.ERROR, javaClass.simpleName) { "This ERROR should not be trigger: $error" }
                         error.printStackTrace()
@@ -110,13 +128,23 @@ class PrinterController {
                 }
             }
 
-            log(Level.INFO, javaClass.simpleName) { "Print DONE" }
+            log(Level.INFO, javaClass.simpleName) { "Wait until finished" }
+            val success = waitPrintFinished.block(60000)
+
+            log(Level.INFO, javaClass.simpleName) { "Print DONE: $success" }
+
+            if (null != raisedError){
+                throw raisedError!!
+            }
+            //delay(1000)
         } finally {
             log(Level.INFO, javaClass.simpleName) { "Print CLEANUP" }
 
             controller?.LptClose()
             controller?.disconnect()
             controller?.close()
+
+            waitPrintFinished.close()
 
             log(Level.INFO, javaClass.simpleName) { "Print CLEANUP is COMPLETED" }
         }
