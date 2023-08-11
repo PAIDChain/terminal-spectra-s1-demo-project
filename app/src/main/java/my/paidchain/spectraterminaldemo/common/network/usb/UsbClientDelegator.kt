@@ -16,8 +16,15 @@ class UsbClientDelegator(
             log(Level.INFO, javaClass.simpleName) { "USB connection RECEIVED data ${data.size} bytes. YEAH!!!" }
 
             if (data.size > receiveBuffer.remaining()) {
-                fnError(ContextAwareError(Errors.OutOfRange.name, "Receive buffer overflow", mapOf("size" to receiveBuffer.remaining(), "required" to data.size)))
+                fnError(
+                    ContextAwareError(
+                        Errors.OutOfRange.name, "Receive buffer overflow", mapOf(
+                            "size" to receiveBuffer.remaining(), "required" to data.size
+                        )
+                    )
+                )
             }
+            
             receiveBuffer.put(data)
         } catch (error: Throwable) {
             log(Level.ERROR, javaClass.simpleName) { "USB connection ERROR: $error" }

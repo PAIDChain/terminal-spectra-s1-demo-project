@@ -179,9 +179,11 @@ abstract class UsbClientController(private val app: Application, receiveBuffer: 
             open()
         }
 
-        val reader = controller?.second ?: return -1
-
         try {
+            val reader = controller?.second ?: throw ContextAwareError(
+                Errors.ConnectionError.name, "USB connection error"
+            )
+
             if (0 >= reader.available()) {
                 Thread.sleep(100)
 

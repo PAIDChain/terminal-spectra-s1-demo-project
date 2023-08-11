@@ -70,31 +70,32 @@ class JSActivity : AppCompatActivity() {
         val handler = Handler(Looper.getMainLooper())
 
         val runnable = object : Runnable {
+            val runnable = this
+
             override fun run() {
                 CoroutineScope(Dispatchers.Default).launch {
-                    try {
-                        val readLength = KeyTransport.instance.read(buffer)
+                    if (!isInterrupted) {
+                        try {
+                            val readLength = KeyTransport.instance.read(buffer)
 
-                        if (0 < readLength) {
-                            log(Level.INFO, javaClass.simpleName) { "Serial read() - $readLength: ${buffer.toHex()}" }
-                            buffer.clear()
-                        } else {
-                            log(Level.INFO, javaClass.simpleName) { "Serial read() - EMPTY" }
+                            if (0 < readLength) {
+                                log(Level.INFO, javaClass.simpleName) { "Serial read() - $readLength: ${buffer.toHex()}" }
+                                buffer.clear()
+                            } else {
+                                log(Level.INFO, javaClass.simpleName) { "Serial read() - EMPTY" }
 
-                            KeyTransport.instance.send(ByteBuffer.wrap("AABBCC".hexStringToByteArray()))
-                            log(Level.INFO, javaClass.simpleName) { "Serial send()" }
+                                KeyTransport.instance.send(ByteBuffer.wrap("AABBCC".hexStringToByteArray()))
+                                log(Level.INFO, javaClass.simpleName) { "Serial send()" }
+                            }
+                        } catch (error: Throwable) {
+                            log(Level.WARN, javaClass.simpleName) { "ERROR: $error" }
                         }
-                    } catch (error: Throwable) {
-                        log(Level.WARN, javaClass.simpleName) { "ERROR: $error" }
-                    }
-                }
 
-                if (!isInterrupted) {
-                    handler.postDelayed(this, 3000) // Reschedule again
-                    log(Level.INFO, javaClass.simpleName) { "Serial stopped" }
-                } else {
-                    KeyTransport.instance.close()
-                    log(Level.INFO, javaClass.simpleName) { "Serial close()" }
+                        handler.postDelayed(runnable, 3000) // Reschedule again
+                    } else {
+                        KeyTransport.instance.close()
+                        log(Level.INFO, javaClass.simpleName) { "Serial close() and exit" }
+                    }
                 }
             }
         }
