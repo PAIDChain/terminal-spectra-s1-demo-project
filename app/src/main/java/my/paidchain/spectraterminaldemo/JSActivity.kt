@@ -3,14 +3,17 @@ package my.paidchain.spectraterminaldemo
 import android.graphics.BitmapFactory
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.widget.Button
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import my.paidchain.spectraterminaldemo.common.Level
-import my.paidchain.spectraterminaldemo.common.getByteArrayFromAssetFile
-import my.paidchain.spectraterminaldemo.common.hexStringToByteArray
+import my.paidchain.spectraterminaldemo.common.Misc.Companion.getByteArrayFromAssetFile
+import my.paidchain.spectraterminaldemo.common.Misc.Companion.hexStringToByteArray
+import my.paidchain.spectraterminaldemo.common.Misc.Companion.toHex
 import my.paidchain.spectraterminaldemo.common.log
 import my.paidchain.spectraterminaldemo.common.printer.Printer
 import my.paidchain.spectraterminaldemo.common.printer.PrinterController
@@ -18,15 +21,21 @@ import my.paidchain.spectraterminaldemo.common.secureElement.KeyParamKey
 import my.paidchain.spectraterminaldemo.common.secureElement.KeyParamTypeValue
 import my.paidchain.spectraterminaldemo.common.secureElement.KeyStatus
 import my.paidchain.spectraterminaldemo.common.secureElement.SecureElement
+import my.paidchain.spectraterminaldemo.controllers.keyLoader.KeyTransport
+import java.nio.ByteBuffer
 
 class JSActivity : AppCompatActivity() {
     private val logger = KotlinLogging.logger { }
+
+    private var isInterrupted = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_jsactivity)
 
         PrinterController.init(application)
         SecureElement.init(application)
+        KeyTransport.init(application)
 
         //Button for JS Test Case
         val cmdJS: Button = findViewById<Button>(R.id.JS_Test_Start)
@@ -35,7 +44,9 @@ class JSActivity : AppCompatActivity() {
 
             CoroutineScope(Dispatchers.Default).launch {
 //                testPrinter()
-                testKeyInjection()
+//                testKeyInjection()
+//                testKeyInjectionInBackground()
+                testSerialOpen()
             }
         }
 
@@ -45,16 +56,90 @@ class JSActivity : AppCompatActivity() {
             logger.info { "JS" }
 
             CoroutineScope(Dispatchers.Default).launch {
-                SecureElement.instance.isKeysReady()
+                testSerialClose()
+//                testDeleteAllKeys()
+            }
+        }
+    }
 
-                // Delete all keys
-                if (SecureElement.instance.deleteKey(null)) {
-                    log(Level.INFO, javaClass.simpleName) { "All keys DELETED" }
+    private suspend fun testSerialOpen() {
+        KeyTransport.instance.open()
+        log(Level.INFO, javaClass.simpleName) { "Serial open()" }
+
+        val buffer = ByteBuffer.allocate(10240)
+        val handler = Handler(Looper.getMainLooper())
+
+        val runnable = object : Runnable {
+            override fun run() {
+                CoroutineScope(Dispatchers.Default).launch {
+                    try {
+                        val readLength = KeyTransport.instance.read(buffer)
+
+                        if (0 < readLength) {
+                            log(Level.INFO, javaClass.simpleName) { "Serial read() - $readLength: ${buffer.toHex()}" }
+                            buffer.clear()
+                        } else {
+                            log(Level.INFO, javaClass.simpleName) { "Serial read() - EMPTY" }
+
+                            KeyTransport.instance.send(ByteBuffer.wrap("AABBCC".hexStringToByteArray()))
+                            log(Level.INFO, javaClass.simpleName) { "Serial send()" }
+                        }
+                    } catch (error: Throwable) {
+                        log(Level.WARN, javaClass.simpleName) { "ERROR: $error" }
+                    }
+                }
+
+                if (!isInterrupted) {
+                    handler.postDelayed(this, 3000) // Reschedule again
+                    log(Level.INFO, javaClass.simpleName) { "Serial stopped" }
                 } else {
-                    log(Level.ERROR, javaClass.simpleName) { "Failed to delete all keys" }
+                    KeyTransport.instance.close()
+                    log(Level.INFO, javaClass.simpleName) { "Serial close()" }
                 }
             }
         }
+
+        handler.postDelayed(runnable, 0) // Schedule the process
+    }
+
+    private suspend fun testSerialClose() {
+        isInterrupted = true
+        log(Level.INFO, javaClass.simpleName) { "Serial is interrupted" }
+    }
+
+    private suspend fun testDeleteAllKeys() {
+        SecureElement.instance.isKeysReady()
+
+        // Delete all keys
+        if (SecureElement.instance.deleteKey(null)) {
+            log(Level.INFO, javaClass.simpleName) { "All keys DELETED" }
+        } else {
+            log(Level.ERROR, javaClass.simpleName) { "Failed to delete all keys" }
+        }
+    }
+
+    private suspend fun testKeyInjectionInBackground() {
+        val handler = Handler(Looper.getMainLooper())
+
+        val runnable = object : Runnable {
+            override fun run() {
+                CoroutineScope(Dispatchers.Default).launch {
+                    try {
+                        log(Level.WARN, javaClass.simpleName) { "START KEY INJECTION IN BACKGROUND" }
+
+                        testKeyInjection()
+
+                        log(Level.WARN, javaClass.simpleName) { "END KEY INJECTION IN BACKGROUND" }
+                    } catch (error: Throwable) {
+                        log(Level.WARN, javaClass.simpleName) { "ERROR: $error" }
+                    }
+                }
+
+                handler.postDelayed(this, 1000000) // Reschedule again
+            }
+        }
+
+        handler.postDelayed(runnable, 0) // Schedule the process
     }
 
     private suspend fun testKeyInjection() {

@@ -5,7 +5,7 @@ import com.spectratech.controllers.KeyDllController
 import com.spectratech.controllers.PEDDLL
 import my.paidchain.spectraterminaldemo.common.ContextAwareError
 import my.paidchain.spectraterminaldemo.common.Errors
-import my.paidchain.spectraterminaldemo.common.toHex
+import my.paidchain.spectraterminaldemo.common.Misc.Companion.toHex
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 

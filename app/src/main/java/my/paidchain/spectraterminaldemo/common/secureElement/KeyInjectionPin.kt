@@ -4,10 +4,10 @@ import com.spectratech.controllers.PEDDLL
 import my.paidchain.spectraterminaldemo.common.ContextAwareError
 import my.paidchain.spectraterminaldemo.common.Errors
 import my.paidchain.spectraterminaldemo.common.Level
+import my.paidchain.spectraterminaldemo.common.Misc.Companion.toHex
 import my.paidchain.spectraterminaldemo.common.getKeyValue
 import my.paidchain.spectraterminaldemo.common.getKeyValueOrNull
 import my.paidchain.spectraterminaldemo.common.log
-import my.paidchain.spectraterminaldemo.common.toHex
 
 abstract class KeyInjectionPin(private val controller: KeyInjection) {
     private lateinit var keySlot: KeySlot
