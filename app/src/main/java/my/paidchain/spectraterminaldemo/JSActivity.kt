@@ -69,6 +69,8 @@ class JSActivity : AppCompatActivity() {
         val buffer = ByteBuffer.allocate(10240)
         val handler = Handler(Looper.getMainLooper())
 
+        isInterrupted = false
+        
         val runnable = object : Runnable {
             val runnable = this
 
