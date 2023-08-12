@@ -7,8 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Button
-import com.spectratech.serialcontrollers.Serialcontrollers
 import com.spectratech.serialcontrollers.docking.SerialDataListener
+import com.spectratech.serialcontrollers.serialcontrollers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,7 +23,7 @@ import java.nio.ByteBuffer
 
 class TTActivity : AppCompatActivity(), IRestConfig, SerialDataListener {
     private var isInterrupted = false
-    private val serialControllers = Serialcontrollers.getInstance()
+    private val serialControllers = serialcontrollers.getInstance()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

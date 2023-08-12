@@ -17,5 +17,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "SpectraTerminalDemoProject"
 include ':app'
-include ':Controllers'
-include ':Controllers'
