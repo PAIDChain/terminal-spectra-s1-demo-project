@@ -113,7 +113,7 @@ class FullscreenActivity : AppCompatActivity() {
             startActivity(Intent(this, TTActivity::class.java))
         }
 
-
+        startActivity(Intent(this, TTActivity::class.java))
 
 
 
