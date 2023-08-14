@@ -5,7 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import com.spectratech.serialcontrollers.serialcontrollers
+import com.spectratech.serialcontrollers.Serialcontrollers
 import my.paidchain.spectraterminaldemo.common.ContextAwareError
 import my.paidchain.spectraterminaldemo.common.Errors
 import my.paidchain.spectraterminaldemo.common.Level
@@ -27,14 +27,14 @@ abstract class UsbClientController(private val app: Application, receiveBuffer: 
     private val receiveBuffer: ByteBuffer
 
     companion object {
-        private var controller: Pair<serialcontrollers, UsbClientDelegator>? = null
+        private var controller: Pair<Serialcontrollers, UsbClientDelegator>? = null
 
         private var _isSsk: Boolean? = null
 
         fun isSsk(app: Application): Boolean {
             try {
                 if (null == _isSsk) {
-                    val newController = serialcontrollers.getInstance()
+                    val newController = Serialcontrollers.getInstance()
                     _isSsk = newController.refresh(app)
 
                     log(Level.INFO, Companion::class.java.simpleName) { "SSK availability: $_isSsk" }
@@ -113,7 +113,7 @@ abstract class UsbClientController(private val app: Application, receiveBuffer: 
             app.registerReceiver(broadcastReceiver, filter)
         }
 
-        val newController = serialcontrollers.getInstance()
+        val newController = Serialcontrollers.getInstance()
         val delegator = UsbClientDelegator(
             receiveBuffer, fnError = { error -> onError(error) }
         )

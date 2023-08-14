@@ -6,9 +6,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
 import android.widget.Button
+import com.spectratech.serialcontrollers.Serialcontrollers
 import com.spectratech.serialcontrollers.docking.SerialDataListener
-import com.spectratech.serialcontrollers.serialcontrollers
+import com.spectratech.serialcontrollers.docking.SerialManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,7 +25,7 @@ import java.nio.ByteBuffer
 
 class TTActivity : AppCompatActivity(), IRestConfig, SerialDataListener {
     private var isInterrupted = false
-    private val serialControllers = serialcontrollers.getInstance()
+    private val serialControllers = Serialcontrollers.getInstance()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +63,27 @@ class TTActivity : AppCompatActivity(), IRestConfig, SerialDataListener {
 
     private fun connectSerial(context: Context, serialDataListener: SerialDataListener) {
         serialControllers.connectSerial(context, serialDataListener)
+
+        serialControllers.sendSerial("hello".toByteArray())
+
+        //checkConnection()
+
+    }
+
+    private fun checkConnection(){
+        val handler = Handler(Looper.getMainLooper())
+
+        val runnable = object : Runnable {
+            override fun run() {
+
+                log(Level.INFO, javaClass.simpleName) { "isConnected: ${SerialManager.getInstance().isConnected()}" }
+
+                handler.postDelayed(this, 1000)
+
+            }
+        }
+
+        handler.postDelayed(runnable, 0) // 1000 milliseconds = 1 second
     }
 
     override fun onConfigUpdateSuccess(code: Int?, result: String?) {

@@ -64,7 +64,9 @@ class JSActivity : AppCompatActivity() {
 
     private suspend fun testSerialOpen() {
         KeyTransport.instance.open()
-        log(Level.INFO, javaClass.simpleName) { "Serial open()" }
+        log(Level.INFO, javaClass.simpleName) { "Serial open(): " }
+
+
 
         val buffer = ByteBuffer.allocate(10240)
         val handler = Handler(Looper.getMainLooper())
