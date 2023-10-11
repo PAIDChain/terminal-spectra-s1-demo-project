@@ -21,6 +21,7 @@ import my.paidchain.spectraterminaldemo.common.secureElement.KeyParamKey
 import my.paidchain.spectraterminaldemo.common.secureElement.KeyParamTypeValue
 import my.paidchain.spectraterminaldemo.common.secureElement.KeyStatus
 import my.paidchain.spectraterminaldemo.common.secureElement.SecureElement
+import my.paidchain.spectraterminaldemo.controllers.appInstaller.AppUpdate
 import my.paidchain.spectraterminaldemo.controllers.keyLoader.KeyTransport
 import java.nio.ByteBuffer
 
@@ -46,7 +47,8 @@ class JSActivity : AppCompatActivity() {
 //                testPrinter()
 //                testKeyInjection()
 //                testKeyInjectionInBackground()
-                testSerialOpen()
+//                testSerialOpen()
+                testAppInstall()
             }
         }
 
@@ -62,17 +64,19 @@ class JSActivity : AppCompatActivity() {
         }
     }
 
+    private fun testAppInstall() {
+        AppUpdate.instance.download("https://update.paidchain.my/pos-my/a.apk")
+    }
+
     private suspend fun testSerialOpen() {
         KeyTransport.instance.open()
         log(Level.INFO, javaClass.simpleName) { "Serial open(): " }
-
-
 
         val buffer = ByteBuffer.allocate(10240)
         val handler = Handler(Looper.getMainLooper())
 
         isInterrupted = false
-        
+
         val runnable = object : Runnable {
             val runnable = this
 
