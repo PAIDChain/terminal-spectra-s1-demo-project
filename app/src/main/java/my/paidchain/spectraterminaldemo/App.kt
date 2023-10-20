@@ -1,36 +1,27 @@
 package my.paidchain.spectraterminaldemo
 
 import android.app.Application
-import android.content.Context
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import my.paidchain.spectraterminaldemo.service.MainService
 
 class App : Application() {
-    private var sInstance: App? = null
-    private var executorService: ExecutorService? = null
+    companion object {
+        private var self: App? = null
+
+        val instance: App
+            get() {
+                if (null == self) {
+                    self = App()
+                }
+                return self!!
+            }
+    }
+
+    init {
+        self = this
+    }
 
     override fun onCreate() {
         super.onCreate()
-        sInstance = this
-        executorService = Executors.newCachedThreadPool()
-
-        CoroutineScope(Dispatchers.Default).launch {
-            try {
-                doInit()
-            } catch (error: Throwable) {
-                // Ignore error
-            }
-        }
-    }
-
-    private fun doInit() {
-        Bootstrap.init(this@App)
-    }
-
-    fun get(): Context {
-        return this.applicationContext
+        MainService.instance.process()
     }
 }

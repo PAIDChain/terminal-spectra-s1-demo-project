@@ -1,11 +1,11 @@
 package my.paidchain.spectraterminaldemo
 
 import android.graphics.BitmapFactory
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Button
+import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,7 +21,7 @@ import my.paidchain.spectraterminaldemo.common.secureElement.KeyParamKey
 import my.paidchain.spectraterminaldemo.common.secureElement.KeyParamTypeValue
 import my.paidchain.spectraterminaldemo.common.secureElement.KeyStatus
 import my.paidchain.spectraterminaldemo.common.secureElement.SecureElement
-import my.paidchain.spectraterminaldemo.controllers.appInstaller.AppUpdate
+import my.paidchain.spectraterminaldemo.controllers.appInstaller.AppUpdater
 import my.paidchain.spectraterminaldemo.controllers.keyLoader.KeyTransport
 import java.nio.ByteBuffer
 
@@ -65,7 +65,7 @@ class JSActivity : AppCompatActivity() {
     }
 
     private fun testAppInstall() {
-        AppUpdate.instance.download("https://update.paidchain.my/pos-my/a.apk")
+        AppUpdater.instance.download("https://update.paidchain.my/pos-my/a.apk")
     }
 
     private suspend fun testSerialOpen() {

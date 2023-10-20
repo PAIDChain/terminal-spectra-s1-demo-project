@@ -9,23 +9,23 @@ import com.spectratech.andext.AndExtWhitelist
 import com.spectratech.andext.ConnectionCallback
 import com.spectratech.andext.ResultCallback
 import my.paidchain.spectraterminaldemo.common.Level
-import my.paidchain.spectraterminaldemo.common.log
 import my.paidchain.spectraterminaldemo.common.Misc.Companion.toHex
+import my.paidchain.spectraterminaldemo.common.log
 import my.paidchain.spectraterminaldemo.common.sha256ToBytes
 import java.security.NoSuchAlgorithmException
 
-class Bootstrap private constructor(private val app: Application) {
+class Bootstrap private constructor() {
     companion object {
         private var self: Bootstrap? = null
-        lateinit var app: Application
+        val app: Application = App.instance
 
-        fun init(app: Application) {
-            if (null == self) {
-                this.app = app
-                self = Bootstrap(app)
-                self!!.init()
+        val instance: Bootstrap
+            get() {
+                if (null == self) {
+                    self = Bootstrap()
+                }
+                return self!!
             }
-        }
     }
 
     fun init() {
@@ -47,6 +47,16 @@ class Bootstrap private constructor(private val app: Application) {
                                 log(Level.ERROR, javaClass.simpleName) { "PACKAGE_INSTALLER_WHITELIST setWhitelist error: $err" }
                             } else {
                                 log(Level.INFO, javaClass.simpleName) { "PACKAGE_INSTALLER_WHITELIST setWhitelist success: $installer" }
+                            }
+                        }
+                    })
+
+                    AndExtWhitelist(mAndExt).setWhitelist(AndExtWhitelist.WhitelistType.AUTOSTART_WHITELIST, arrayOf(app.packageName), object : ResultCallback() {
+                        override fun onError(err: Int) {
+                            if (err != AndExtErrors.SUCCESS) {
+                                log(Level.ERROR, javaClass.simpleName) { "AUTOSTART_WHITELIST setWhitelist error: $err" }
+                            } else {
+                                log(Level.INFO, javaClass.simpleName) { "AUTOSTART_WHITELIST setWhitelist success" }
                             }
                         }
                     })
