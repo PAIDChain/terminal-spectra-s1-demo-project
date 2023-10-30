@@ -6,6 +6,9 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
 import android.os.IBinder
+import com.spectratech.andext.AndExt
+import com.spectratech.andext.AndExtLaunchApp
+import com.spectratech.andext.ConnectionCallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -83,7 +86,7 @@ internal class PrivilegedServiceDelegator(
     }
 }
 
-class AppInstaller {
+class AppInstaller private constructor() {
     companion object {
         private var self: AppInstaller? = null
 
@@ -97,21 +100,58 @@ class AppInstaller {
     }
 
     fun launch(packageName: String): Boolean {
-        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: LAUNCHING $packageName" }
+        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: APP LAUNCHING $packageName" }
 
         val intent = Bootstrap.app.packageManager.getLaunchIntentForPackage(packageName)
 
-        if (null != intent) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT)
-
-            Bootstrap.app.startActivity(intent)
-            
-            log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: LAUNCHED $packageName" }
-            return true
+        if (null == intent) {
+            log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: APP LAUNCH NOT FOUND $packageName" }
+            return false
         }
 
-        log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: NOT FOUND $packageName" }
-        return false
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        val andExt = AndExt(Bootstrap.app)
+        val callResult = CompletableFuture<Unit>()
+
+        return try {
+            andExt.connect(object : ConnectionCallback {
+                override fun onServiceConnected() {
+                    AndExtLaunchApp(andExt).launchApp(intent, object : AndExtLaunchApp.LaunchAppCallback() {
+                        override fun onResult(result: String) {
+                            log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: APP LAUNCH CALLBACK $packageName - $result" }
+
+                            if ("1" == result) {
+                                callResult.complete(Unit)
+                                return
+                            }
+
+                            callResult.completeExceptionally(
+                                ContextAwareError(
+                                    Errors.Failed.name, "Package launch failed", mapOf("returnCode" to result, "packageName" to packageName)
+                                )
+                            )
+                        }
+                    })
+                }
+
+                override fun onServiceDisconnected() {
+
+                }
+            })
+
+            // Wait for call result
+            callResult.get()
+
+            log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: APP LAUNCHED $packageName" }
+
+            true
+        } catch (error: Throwable) {
+            log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: APP LAUNCH ERROR $error" }
+            false
+        } finally {
+            andExt.disconnect()
+        }
     }
 
     fun install(packageName: String, fileUri: String): String {
@@ -132,6 +172,14 @@ class AppInstaller {
                             result.complete(packageName)
                             return
                         }
+
+                        // Recovery handling for exceptional cases
+                        // TODO: What kind of exceptional cases should be handled?
+//                        when(returnCode){
+//                            InstallCode.FAILED_UPDATE_INCOMPATIBLE.value -> {
+//
+//                            }
+//                        }
 
                         result.completeExceptionally(
                             ContextAwareError(
