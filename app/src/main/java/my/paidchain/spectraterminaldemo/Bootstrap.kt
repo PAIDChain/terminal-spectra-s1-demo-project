@@ -8,8 +8,11 @@ import com.spectratech.andext.AndExtErrors
 import com.spectratech.andext.AndExtWhitelist
 import com.spectratech.andext.ConnectionCallback
 import com.spectratech.andext.ResultCallback
+import my.paidchain.spectraterminaldemo.common.ContextAwareError
+import my.paidchain.spectraterminaldemo.common.Errors
 import my.paidchain.spectraterminaldemo.common.Level
 import my.paidchain.spectraterminaldemo.common.Misc.Companion.toHex
+import my.paidchain.spectraterminaldemo.common.doUntilComplete
 import my.paidchain.spectraterminaldemo.common.log
 import my.paidchain.spectraterminaldemo.common.sha256ToBytes
 import java.security.NoSuchAlgorithmException
@@ -26,51 +29,63 @@ class Bootstrap private constructor() {
                 }
                 return self!!
             }
+
+        var hadError: Throwable? = null
+            set(value) {
+                field = value
+            }
     }
 
-    fun init() {
+    suspend fun init() {
         // Initialize systems
         setDefaultAppSettings()
     }
 
-    private fun setDefaultAppSettings() {
-        val mAndExt = AndExt(app)
+    private suspend fun setDefaultAppSettings() {
+        doUntilComplete(sleepIntervalInMs = 5000L, isFatal = { error ->
+            hadError = ContextAwareError(Errors.Failed.name, "setDefaultAppSettings ERROR: $error")
 
-        try {
-            mAndExt.connect(object : ConnectionCallback {
+            log(Level.ERROR, javaClass.simpleName) { "Bootstrap ERROR: $hadError" }
+            false
+        }, isInterrupted = { false }, process = {
+            val andExt = AndExt(app)
+
+            andExt.connect(object : ConnectionCallback {
                 override fun onServiceConnected() {
-                    val installer = "${app.packageName}|${getSignatureFingerprint()}"
+                    try {
+                        // Register to auto start
+                        whitelist(andExt, AndExtWhitelist.WhitelistType.AUTOSTART_WHITELIST, arrayOf(app.packageName))
 
-                    AndExtWhitelist(mAndExt).setWhitelist(AndExtWhitelist.WhitelistType.PACKAGE_INSTALLER_WHITELIST, arrayOf(installer), object : ResultCallback() {
-                        override fun onError(err: Int) {
-                            if (err != AndExtErrors.SUCCESS) {
-                                log(Level.ERROR, javaClass.simpleName) { "PACKAGE_INSTALLER_WHITELIST setWhitelist error: $err" }
-                            } else {
-                                log(Level.INFO, javaClass.simpleName) { "PACKAGE_INSTALLER_WHITELIST setWhitelist success: $installer" }
-                            }
-                        }
-                    })
-
-                    AndExtWhitelist(mAndExt).setWhitelist(AndExtWhitelist.WhitelistType.AUTOSTART_WHITELIST, arrayOf(app.packageName), object : ResultCallback() {
-                        override fun onError(err: Int) {
-                            if (err != AndExtErrors.SUCCESS) {
-                                log(Level.ERROR, javaClass.simpleName) { "AUTOSTART_WHITELIST setWhitelist error: $err" }
-                            } else {
-                                log(Level.INFO, javaClass.simpleName) { "AUTOSTART_WHITELIST setWhitelist success" }
-                            }
-                        }
-                    })
+                        // Register to have install package ability
+                        whitelist(andExt, AndExtWhitelist.WhitelistType.PACKAGE_INSTALLER_WHITELIST, arrayOf("${app.packageName}|${getSignatureFingerprint()}"))
+                    } catch (error: Throwable) {
+                        hadError = ContextAwareError(Errors.Failed.name, "setDefaultAppSettings ERROR: $error")
+                    } finally {
+                        andExt.disconnect()
+                    }
                 }
 
                 override fun onServiceDisconnected() {
+                    //
                 }
             })
-        } catch (error: Throwable) {
-            error.printStackTrace()
-        } finally {
-            mAndExt.disconnect()
-        }
+        })
     }
+
+    private fun whitelist(andExt: AndExt, type: AndExtWhitelist.WhitelistType, strings: Array<String>) {
+        AndExtWhitelist(andExt).setWhitelist(type, strings, object : ResultCallback() {
+            override fun onError(errorNo: Int) {
+                if (errorNo != AndExtErrors.SUCCESS) {
+                    hadError = ContextAwareError(
+                        Errors.Failed.name, "Set whitelist ${type.name} ERROR: $errorNo", mapOf("errorNo" to errorNo)
+                    )
+                } else {
+                    log(Level.INFO, javaClass.simpleName) { "Set whitelist ${type.name}" }
+                }
+            }
+        })
+    }
+
 
     private fun getSignatureFingerprint(): String {
         try {

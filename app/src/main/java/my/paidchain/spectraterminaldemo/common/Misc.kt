@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -35,7 +36,10 @@ import java.text.DateFormat
 import java.text.DecimalFormat
 import java.text.ParseException
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.EnumMap
+import java.util.Locale
+import java.util.TimeZone
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -548,4 +552,24 @@ suspend fun <T> await(handler: AwaitHandler1<T>): T {
             }
         }
     }
+}
+
+suspend fun <R> doUntilComplete(sleepIntervalInMs: Long, process: suspend () -> R, isFatal: (error: Throwable) -> Boolean, isInterrupted: () -> Boolean): R {
+    do {
+        try {
+            return process()
+        } catch (error: Throwable) {
+            if (isFatal(error)) {
+                throw error
+            }
+
+            withContext(Dispatchers.IO) {
+                Thread.sleep(sleepIntervalInMs)
+            }
+        }
+
+        if (isInterrupted()) {
+            throw ContextAwareError(Errors.Cancelled.name, "Operation was cancelled")
+        }
+    } while (true)
 }

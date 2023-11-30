@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.net.Uri
 import android.os.IBinder
+import androidx.core.content.FileProvider
+import androidx.core.net.toFile
 import com.spectratech.andext.AndExt
 import com.spectratech.andext.AndExtLaunchApp
 import com.spectratech.andext.ConnectionCallback
@@ -66,6 +68,15 @@ enum class InstallCode(val value: Int) {
     FAILED_USER_RESTRICTED(-111),
     FAILED_DUPLICATE_PERMISSION(-112),
     FAILED_NO_MATCHING_ABIS(-113)
+}
+
+enum class UninstallCode(val value: Int) {
+    SUCCEEDED(1),
+    FAILED_INTERNAL_ERROR(-1),
+    FAILED_DEVICE_POLICY_MANAGER(-2),
+    FAILED_USER_RESTRICTED(-3),
+    FAILED_OWNER_BLOCKED(-4),
+    FAILED_ABORTED(-5)
 }
 
 internal class PrivilegedServiceDelegator(
@@ -154,8 +165,93 @@ class AppInstaller private constructor() {
         }
     }
 
-    fun install(packageName: String, fileUri: String): String {
-        val uri = Uri.parse(fileUri)
+    fun install(packageName: String, url: String, uri: String): String {
+        val uri = Uri.parse(uri)
+        val result = CompletableFuture<String>()
+
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                val privilegedServiceDelegator = PrivilegedServiceDelegator(fnConnected = { _, privilegedService ->
+                    log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: BOUND to privileged service" }
+
+                    val callback: IPrivilegedCallback = object : IPrivilegedCallback.Stub() {
+                        override fun handleResult(packageName: String, returnCode: Int) {
+                            val codeName = InstallCode.values().find { it.value == returnCode }?.name ?: returnCode.toString()
+
+                            log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: INSTALL CALLBACK $packageName - $codeName" }
+
+                            if (InstallCode.SUCCEEDED.value == returnCode) {
+                                result.complete(packageName)
+                                return
+                            }
+
+                            // Recovery handling for exceptional cases
+                            // TODO: What kind of exceptional cases should be handled?
+//                        when(returnCode){
+//                            InstallCode.FAILED_UPDATE_INCOMPATIBLE.value -> {
+//
+//                            }
+//                        }
+
+                            result.completeExceptionally(
+                                ContextAwareError(
+                                    Errors.Failed.name, "Package installation failed", mapOf(
+                                        "returnCode" to codeName, "packageName" to packageName, "url" to url
+                                    )
+                                )
+                            )
+                        }
+                    }
+
+                    try {
+                        // Grant read file permission to the Privileged Service
+                        val authority = Bootstrap.app.applicationContext.packageName + ".FileProvider"
+                        val apkUri = FileProvider.getUriForFile(Bootstrap.app.applicationContext, authority, uri.toFile())
+
+                        Bootstrap.app.applicationContext.grantUriPermission(PRIVILEGED_EXTENSION_PACKAGE_NAME, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+                        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: INSTALLING $packageName: $url (${apkUri.encodedPath})" }
+
+                        if (!privilegedService.hasPrivilegedPermissions()) {
+                            throw ContextAwareError(
+                                Errors.Forbidden.name, "Install package permission is not granted", mapOf(
+                                    "packageName" to packageName, "url" to url
+                                )
+                            )
+                        }
+
+                        privilegedService.installPackage(apkUri, ACTION_INSTALL_REPLACE_EXISTING, null, callback)
+                    } catch (error: Throwable) {
+                        log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: INSTALL ERROR $error" }
+                        result.completeExceptionally(error)
+                    }
+                }, fnError = { error -> result.completeExceptionally(error) })
+
+                val serviceIntent = Intent("$PRIVILEGED_EXTENSION_PACKAGE_NAME.$PRIVILEGED_EXTENSION_SERVICE_INTENT").apply {
+                    setPackage(PRIVILEGED_EXTENSION_PACKAGE_NAME)
+                }
+
+                if (!Bootstrap.app.bindService(serviceIntent, privilegedServiceDelegator, Context.BIND_AUTO_CREATE)) {
+                    throw ContextAwareError(
+                        Errors.NotAvailable.name, "Privileged service is not available", mapOf(
+                            "packageName" to "$PRIVILEGED_EXTENSION_PACKAGE_NAME.$PRIVILEGED_EXTENSION_SERVICE_INTENT"
+                        )
+                    )
+                }
+            } catch (error: Throwable) {
+                log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: INSTALL ERROR $error" }
+                result.completeExceptionally(error)
+            }
+        }
+
+        val installedPackageName = result.get()
+
+        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: INSTALLED $installedPackageName: $url" }
+
+        return installedPackageName
+    }
+
+    fun uninstall(packageName: String): String {
         val result = CompletableFuture<String>()
 
         try {
@@ -164,43 +260,37 @@ class AppInstaller private constructor() {
 
                 val callback: IPrivilegedCallback = object : IPrivilegedCallback.Stub() {
                     override fun handleResult(packageName: String, returnCode: Int) {
-                        val codeName = InstallCode.values().find { it.value == returnCode }?.name ?: returnCode.toString()
+                        val codeName = UninstallCode.values().find { it.value == returnCode }?.name ?: returnCode.toString()
 
-                        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: CALLBACK $packageName - $codeName" }
+                        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: UNINSTALL CALLBACK $packageName - $codeName" }
 
-                        if (InstallCode.SUCCEEDED.value == returnCode) {
+                        if (UninstallCode.SUCCEEDED.value == returnCode) {
                             result.complete(packageName)
                             return
                         }
 
-                        // Recovery handling for exceptional cases
-                        // TODO: What kind of exceptional cases should be handled?
-//                        when(returnCode){
-//                            InstallCode.FAILED_UPDATE_INCOMPATIBLE.value -> {
-//
-//                            }
-//                        }
-
                         result.completeExceptionally(
                             ContextAwareError(
-                                Errors.Failed.name, "Package installation failed", mapOf("returnCode" to codeName, "packageName" to packageName)
+                                Errors.Failed.name, "Package uninstallation failed", mapOf(
+                                    "returnCode" to codeName, "packageName" to packageName
+                                )
                             )
                         )
                     }
                 }
 
                 try {
-                    log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: INSTALLING $packageName: ${uri.encodedPath}" }
+                    log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: UNINSTALLING $packageName" }
 
                     if (!privilegedService.hasPrivilegedPermissions()) {
                         throw ContextAwareError(
-                            Errors.Forbidden.name, "Install package permission is not granted", mapOf("packageName" to packageName)
+                            Errors.Forbidden.name, "Uninstall package permission is not granted", mapOf("packageName" to packageName)
                         )
                     }
 
-                    privilegedService.installPackage(uri, ACTION_INSTALL_REPLACE_EXISTING, null, callback)
+                    privilegedService.deletePackage(packageName, 0, callback)
                 } catch (error: Throwable) {
-                    log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: INSTALL ERROR $error" }
+                    log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: UNINSTALL ERROR $error" }
                     result.completeExceptionally(error)
                 }
             }, fnError = { error -> result.completeExceptionally(error) })
@@ -217,14 +307,14 @@ class AppInstaller private constructor() {
                 )
             }
         } catch (error: Throwable) {
-            log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: INSTALL ERROR $error" }
+            log(Level.ERROR, javaClass.simpleName) { "APP_INSTALLER: UNINSTALL ERROR $error" }
             result.completeExceptionally(error)
         }
 
-        val installedPackageName = result.get()
+        val uninstalledPackageName = result.get()
 
-        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: INSTALLED $installedPackageName: ${uri.encodedPath}" }
+        log(Level.WARN, javaClass.simpleName) { "APP_INSTALLER: UNINSTALLED $uninstalledPackageName" }
 
-        return installedPackageName
+        return uninstalledPackageName
     }
 }

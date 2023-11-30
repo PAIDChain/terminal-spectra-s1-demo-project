@@ -6,6 +6,7 @@ import com.spectratech.controllers.PEDDLL
 import my.paidchain.spectraterminaldemo.common.ContextAwareError
 import my.paidchain.spectraterminaldemo.common.Errors
 import my.paidchain.spectraterminaldemo.common.Misc.Companion.toHex
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
@@ -13,7 +14,8 @@ enum class KeyType {
     TMK,
     PIN,
     MAC,
-    CIPHER
+    CIPHER,
+    RAW
 }
 
 enum class KeySpec(val keySize: Int, val blockSize: Int, val keyType: Byte) {
@@ -24,7 +26,8 @@ enum class KeySpec(val keySize: Int, val blockSize: Int, val keyType: Byte) {
     DUKPT(keySize = 16, 8, 0x00),
     DUKPT_AES_128(keySize = 16, 16, PEDDLL.VALUE_DUKPTAES_KEYTYPE_AES128.toByte()),
     DUKPT_AES_192(keySize = 24, 16, PEDDLL.VALUE_DUKPTAES_KEYTYPE_AES192.toByte()),
-    DUKPT_AES_256(keySize = 32, 16, PEDDLL.VALUE_DUKPTAES_KEYTYPE_AES256.toByte())
+    DUKPT_AES_256(keySize = 32, 16, PEDDLL.VALUE_DUKPTAES_KEYTYPE_AES256.toByte()),
+    RAW(keySize = 0, blockSize = 0, keyType = 0x00)
 }
 
 enum class KeyUsage(val value: Byte) {
@@ -49,24 +52,26 @@ enum class KeyUsage(val value: Byte) {
     DUKPT_AES_MPP(PEDDLL.VALUE_DUKPTAES_KEYUSAGE_MPP)
 }
 
-class KeyInjection(private val app: Application, private val controller: KeyDllController) {
+class KeyInjection(private val app: Application, internal val ops: SecureElementOps, private val controller: KeyDllController) {
     private inner class KeyInjectionTmkDelegator : KeyInjectionTmk(this)
     private inner class KeyInjectionPinDelegator : KeyInjectionPin(this)
     private inner class KeyInjectionMacDelegator : KeyInjectionMac(this)
     private inner class KeyInjectionCipherDelegator : KeyInjectionCipher(this)
+    private inner class KeyInjectionRawDelegator : KeyInjectionRaw(this)
 
-    fun injectKey(keySlot: KeySlot, params: KeyParam) {
-        when (keySlot.type) {
+    fun injectKey(keySlot: KeySlot, params: KeyParam): ByteArray? {
+        return when (keySlot.type) {
             KeyType.TMK -> KeyInjectionTmkDelegator().injectKey(keySlot, params)
             KeyType.PIN -> KeyInjectionPinDelegator().injectKey(keySlot, params)
             KeyType.MAC -> KeyInjectionMacDelegator().injectKey(keySlot, params)
             KeyType.CIPHER -> KeyInjectionCipherDelegator().injectKey(keySlot, params)
+            KeyType.RAW -> KeyInjectionRawDelegator().injectKey(keySlot, params)
         }
     }
 
     internal fun inject(keySlot: KeySlot, algorithm: Byte, usage: Byte, key: ByteArray, kcv: ByteArray?, tmkSlotIndex: Short, ksn: ByteArray? = null, deriveKeyType: Byte? = null, tmkIv: ByteArray? = null) {
         if (!controller.keyDelete(app, keySlot.index)) {
-            throw ContextAwareError(Errors.Failed.name, "Key deletion failed", mapOf("keySlot" to keySlot))
+            throw ContextAwareError(Errors.Failed.name, "Key deletion failed", mapOf("slotIndex" to keySlot.index, "slotCode" to keySlot.code))
         }
 
         val ret = if (null == ksn) {
@@ -89,16 +94,30 @@ class KeyInjection(private val app: Application, private val controller: KeyDllC
         }
 
         if (-1 != ret) {
-            throw ContextAwareError(Errors.Failed.name, "Key injection failed", mapOf("ret" to ret, "keySlot" to keySlot))
+            throw ContextAwareError(
+                Errors.Failed.name, "Key injection failed", mapOf(
+                    "ret" to ret, "kcv" to kcv?.toHex(), "keySlot" to keySlot.code, "keyIndex" to keySlot.index
+                )
+            )
         }
     }
 
     internal fun generateKcv(spec: String, algorithm: String, key: ByteArray, provided: ByteArray? = null): ByteArray {
-        val cipher = Cipher.getInstance(spec)
+        val kcv = when (algorithm) {
+            "SHA-256" -> {
+                val md = MessageDigest.getInstance(algorithm)
 
-        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, algorithm))
+                md.update(key)
+                md.digest()
+            }
 
-        val kcv = cipher.doFinal(ByteArray(cipher.blockSize))
+            else -> {
+                val cipher = Cipher.getInstance(spec)
+
+                cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, algorithm))
+                cipher.doFinal(ByteArray(cipher.blockSize))
+            }
+        }
 
         if (null != provided) {
             val expected = kcv.sliceArray(0..2)

@@ -10,10 +10,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
+        <package android:name="com.spectratech.mpos.peddll" />
     </queries>
     <application
         android:name="my.paidchain.spectraterminaldemo.App"
@@ -32,10 +29,6 @@
         <activity
             android:name="my.paidchain.spectraterminaldemo.JSActivity"
             android:exported="false" />
-
-        <uses-library
-            android:name="scfmanagerlibrary"
-            android:required="true" />
 
         <activity
             android:name="my.paidchain.spectraterminaldemo.FullscreenActivity"

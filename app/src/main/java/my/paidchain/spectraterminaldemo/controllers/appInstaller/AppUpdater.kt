@@ -90,7 +90,7 @@ class AppUpdater {
 
                 log(Level.WARN, javaClass.simpleName) { "APP_UPDATER: INSTALL $packageName" }
 
-                packageName = AppInstaller.instance.install("App", localUri)
+                packageName = AppInstaller.instance.install("App", "", localUri)
 
                 dm.remove(downloadId)
 

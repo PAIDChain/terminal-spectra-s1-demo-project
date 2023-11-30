@@ -1,7 +1,6 @@
 package my.paidchain.spectraterminaldemo
 
 import android.app.Application
-import my.paidchain.spectraterminaldemo.service.MainService
 
 class App : Application() {
     companion object {
@@ -20,8 +19,8 @@ class App : Application() {
         self = this
     }
 
-    override fun onCreate() {
-        super.onCreate()
-        MainService.instance.process()
-    }
+//    override fun onCreate() {
+//        super.onCreate()
+//        MainService.instance.process()
+//    }
 }

@@ -46,9 +46,9 @@ class JSActivity : AppCompatActivity() {
             CoroutineScope(Dispatchers.Default).launch {
 //                testPrinter()
 //                testKeyInjection()
-//                testKeyInjectionInBackground()
+                testKeyInjectionInBackground()
 //                testSerialOpen()
-                testAppInstall()
+//                testAppInstall()
             }
         }
 
@@ -111,20 +111,14 @@ class JSActivity : AppCompatActivity() {
         handler.postDelayed(runnable, 0) // Schedule the process
     }
 
-    private suspend fun testSerialClose() {
+    private fun testSerialClose() {
         isInterrupted = true
         log(Level.INFO, javaClass.simpleName) { "Serial is interrupted" }
     }
 
-    private suspend fun testDeleteAllKeys() {
-        SecureElement.instance.isKeysReady()
-
+    private fun testDeleteAllKeys() {
         // Delete all keys
-        if (SecureElement.instance.deleteKey(null)) {
-            log(Level.INFO, javaClass.simpleName) { "All keys DELETED" }
-        } else {
-            log(Level.ERROR, javaClass.simpleName) { "Failed to delete all keys" }
-        }
+        SecureElement.instance.clearKeys()
     }
 
     private suspend fun testKeyInjectionInBackground() {
@@ -151,69 +145,62 @@ class JSActivity : AppCompatActivity() {
         handler.postDelayed(runnable, 0) // Schedule the process
     }
 
-    private suspend fun testKeyInjection() {
-        SecureElement.instance.isKeysReady()
+    private fun testKeyInjection() {
+        SecureElement.instance.clearKeys()
 
-        var keySlotCode = ""
+        run {
+            // TODO Manually inject PC DUKPT
+            val keySlot = SecureElement.instance.getKeySlot("PC_DUKPT")
 
-        // TODO Manually inject PC DUKPT
-        keySlotCode = "PC_DUKPT"
-        if (KeyStatus.OK != SecureElement.instance.keyStatus(keySlotCode)) {
-            val keySlot = SecureElement.instance.injectKey(
-                keySlotCode, mutableMapOf(
-                    // BDK: 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
-                    KeyParamKey.KSN.name to KeyParamTypeValue(type = KeyParamKey.KSN, value = "FF1020230000000100000000".hexStringToByteArray()),
-                    KeyParamKey.KEY.name to KeyParamTypeValue(type = KeyParamKey.KEY, value = "CABD84866A06A38E7B00ECB9D2B9BE2917FC6A6FA64AA0E92009E9F8908C4241".hexStringToByteArray()),
-                    KeyParamKey.KCV.name to KeyParamTypeValue(type = KeyParamKey.KCV, value = "CEEE6A".hexStringToByteArray())
+            if (KeyStatus.OK != keySlot.status) {
+                keySlot.inject(
+                    mutableMapOf(
+                        // BDK: 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
+                        KeyParamKey.KSN.name to KeyParamTypeValue(type = KeyParamKey.KSN, value = "FF1020230000000100000000".hexStringToByteArray()),
+                        KeyParamKey.KEY.name to KeyParamTypeValue(type = KeyParamKey.KEY, value = "CABD84866A06A38E7B00ECB9D2B9BE2917FC6A6FA64AA0E92009E9F8908C4241".hexStringToByteArray()),
+                        KeyParamKey.KCV.name to KeyParamTypeValue(type = KeyParamKey.KCV, value = "CEEE6A".hexStringToByteArray())
+                    )
                 )
-            )
-            log(Level.WARN, javaClass.simpleName) { "Injected key: ${keySlot.code}" }
-        } else {
-            log(Level.WARN, javaClass.simpleName) { "Key $keySlotCode is present" }
+                log(Level.WARN, javaClass.simpleName) { "Injected key: ${keySlot.code}" }
+            } else {
+                log(Level.WARN, javaClass.simpleName) { "Key ${keySlot.code} is present" }
+            }
         }
 
-        // TODO Manually inject TMK
-        keySlotCode = "BIMB_TMK_NORMAL"
-        if (KeyStatus.OK != SecureElement.instance.keyStatus(keySlotCode)) {
-            val keySlot = SecureElement.instance.injectKey(
-                keySlotCode, mutableMapOf(
-                    KeyParamKey.KEY.name to KeyParamTypeValue(type = KeyParamKey.KEY, value = "031828F00606889AD46FE2AC22D7D13A".hexStringToByteArray())
+        run {
+            // TODO Manually inject TMK
+            val keySlot = SecureElement.instance.getKeySlot("BIMB_TMK_NORMAL")
+
+            if (KeyStatus.OK != keySlot.status) {
+                keySlot.inject(
+                    mutableMapOf(
+                        KeyParamKey.KEY.name to KeyParamTypeValue(type = KeyParamKey.KEY, value = "031828F00606889AD46FE2AC22D7D13A".hexStringToByteArray())
+                    )
                 )
-            )
-            log(Level.INFO, javaClass.simpleName) { "Injected key: ${keySlot.code}" }
-        } else {
-            log(Level.WARN, javaClass.simpleName) { "Key $keySlotCode is present" }
+                log(Level.WARN, javaClass.simpleName) { "Injected key: ${keySlot.code}" }
+            } else {
+                log(Level.WARN, javaClass.simpleName) { "Key ${keySlot.code} is present" }
+            }
         }
 
-        // TODO Manually inject TMK
-        keySlotCode = "BIMB_TMK_SSPN"
-        if (KeyStatus.OK != SecureElement.instance.keyStatus(keySlotCode)) {
-            val keySlot = SecureElement.instance.injectKey(
-                keySlotCode, mutableMapOf(
-                    KeyParamKey.KEY.name to KeyParamTypeValue(type = KeyParamKey.KEY, value = "F0966F481150FA1842D2062118A3B744".hexStringToByteArray())
+        run {
+            val keySlot = SecureElement.instance.getKeySlot("BIMB_SCHEME_TPK_NORMAL")
+
+            if (KeyStatus.OK != keySlot.status) {
+                // Should be able to inject DUKPT key that protected by TMK
+                keySlot.inject(
+                    mutableMapOf(
+                        KeyParamKey.KSN.name to KeyParamTypeValue(type = KeyParamKey.KSN, value = "FFFFA000030003000000".hexStringToByteArray()),
+                        KeyParamKey.KEY.name to KeyParamTypeValue(type = KeyParamKey.KEY, value = "D1439FD2F64B91C334D9D8EC664BF2FC".hexStringToByteArray())
+                    )
                 )
-            )
-            log(Level.INFO, javaClass.simpleName) { "Injected key: ${keySlot.code}" }
-        } else {
-            log(Level.WARN, javaClass.simpleName) { "Key $keySlotCode is present" }
+                log(Level.WARN, javaClass.simpleName) { "Injected key: ${keySlot.code}" }
+            } else {
+                log(Level.WARN, javaClass.simpleName) { "Key ${keySlot.code} is present" }
+            }
         }
 
-        // TODO Manually inject DUKPT
-        keySlotCode = "BIMB_SCHEME_TPK_NORMAL"
-        if (KeyStatus.OK != SecureElement.instance.keyStatus(keySlotCode)) {
-            val keySlot = SecureElement.instance.injectKey(
-                keySlotCode, mutableMapOf(
-                    KeyParamKey.KSN.name to KeyParamTypeValue(type = KeyParamKey.KSN, value = "FFFFA000030003000000".hexStringToByteArray()),
-                    KeyParamKey.KEY.name to KeyParamTypeValue(type = KeyParamKey.KEY, value = "D1439FD2F64B91C334D9D8EC664BF2FC".hexStringToByteArray()),
-                    KeyParamKey.KCV.name to KeyParamTypeValue(type = KeyParamKey.KCV, value = "CADE87".hexStringToByteArray())
-                )
-            )
-            log(Level.INFO, javaClass.simpleName) { "Injected key: ${keySlot.code}" }
-        } else {
-            log(Level.WARN, javaClass.simpleName) { "Key $keySlotCode is present" }
-        }
-
-        log(Level.INFO, javaClass.simpleName) { "Key injected DONE" }
+        log(Level.INFO, javaClass.simpleName) { "Key injection DONE" }
     }
 
     private suspend fun testPrinter() {
